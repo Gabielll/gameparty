@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3, MeshBuilder, StandardMaterial, Color3 } from '@babylonjs/core';
 
-const SceneCanvas: React.FC = () => {
+const SceneComponent: React.FC = () => {
     const reactCanvas = useRef<HTMLCanvasElement>(null);
 
     useEffect(() => {
@@ -24,6 +24,7 @@ const SceneCanvas: React.FC = () => {
             blueMaterial.diffuseColor = new Color3(0, 0, 1); // Blue
 
             // Create board game path
+            const pathData: Vector3[] = [];
             const boxSize = { width: 1, height: 0.2, depth: 1 };
             const spacing = 1.5;
             let currentPosition = new Vector3(0, 0, 0);
@@ -31,6 +32,7 @@ const SceneCanvas: React.FC = () => {
             for (let i = 0; i < 15; i++) {
                 const box = MeshBuilder.CreateBox(`box${i}`, boxSize, scene);
                 box.position = currentPosition.clone();
+                pathData.push(currentPosition.clone());
 
                 if (i === 0) {
                     box.material = greenMaterial;
@@ -41,6 +43,8 @@ const SceneCanvas: React.FC = () => {
                 // Simple path: move along X axis
                 currentPosition.x += spacing;
             }
+
+            console.log('Path Data:', pathData);
 
             engine.runRenderLoop(() => {
                 scene.render();
@@ -55,4 +59,4 @@ const SceneCanvas: React.FC = () => {
     return <canvas ref={reactCanvas} style={{ width: '100%', height: '100%' }} />;
 };
 
-export default SceneCanvas;
+export default SceneComponent;
