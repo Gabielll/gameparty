@@ -1,22 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react'; // Added useState
-import { Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3, MeshBuilder, StandardMaterial, Color3, SceneLoader, Nullable, AbstractMesh } from '@babylonjs/core'; // Added Nullable, AbstractMesh
+import React, { useEffect, useRef, useState } from 'react';
+import { Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3, MeshBuilder, StandardMaterial, Color3, SceneLoader, Nullable, AbstractMesh, Animation } from '@babylonjs/core';
 
 interface SceneComponentProps {
   playerPosition: number;
   pathData: Vector3[];
+  onMovementAnimationEnd: () => void; // Added callback prop
 }
 
-const SceneComponent: React.FC<SceneComponentProps> = ({ playerPosition, pathData }) => {
+const SceneComponent: React.FC<SceneComponentProps> = ({ playerPosition, pathData, onMovementAnimationEnd }) => {
     const reactCanvas = useRef<HTMLCanvasElement>(null);
     const [capybaraMesh, setCapybaraMesh] = useState<Nullable<AbstractMesh>>(null);
+    const [sceneInstance, setSceneInstance] = useState<Nullable<Scene>>(null);
 
     useEffect(() => {
         if (reactCanvas.current) {
             const engine = new Engine(reactCanvas.current, true);
             const scene = new Scene(engine);
+            setSceneInstance(scene); // Store scene instance
 
             // Camera
-            const camera = new ArcRotateCamera("camera", Math.PI / 4, Math.PI / 4, 30, new Vector3(10.5, 0, 0), scene); // Adjusted for isometric view and to see full board
+            const camera = new ArcRotateCamera("camera", Math.PI / 4, Math.PI / 4, 30, new Vector3(10.5, 0, 0), scene); // Adjusted for isometric view
             camera.attachControl(reactCanvas.current, true);
 
             // Light
@@ -29,61 +32,32 @@ const SceneComponent: React.FC<SceneComponentProps> = ({ playerPosition, pathDat
             const blueMaterial = new StandardMaterial("blueMaterial", scene);
             blueMaterial.diffuseColor = new Color3(0, 0, 1); // Blue
 
-            // Create board game path - pathData is now a prop
-            const boxSize = { width: 1, height: 0.2, depth: 1 }; // Spacing and currentPosition also removed as path is from props
-            // Path itself is rendered based on pathData prop
+            // Create board game path from pathData prop
+            if (pathData && pathData.length > 0) {
+                pathData.forEach((pos, index) => {
+                    const box = MeshBuilder.CreateBox(`box${index}`, { width: 1, height: 0.2, depth: 1 }, scene);
+                    box.position = pos;
+                    box.material = index === 0 ? greenMaterial : blueMaterial;
+                });
+            }
 
-            // Render the path from pathData prop
-            pathData.forEach((point, index) => {
-                const box = MeshBuilder.CreateBox(`box${index}`, boxSize, scene);
-                box.position = point;
-                if (index === 0) { // First box
-                    box.material = greenMaterial;
-                } else { // Other boxes
-                    box.material = blueMaterial;
-                }
-            });
-
-            // The old loop for creating boxes based on local pathData generation is removed.
-            // The old currentPosition.x += spacing is also removed.
-            // Old console.log for local pathData is removed.
-
-            // Old box creation loop:
-            // for (let i = 0; i < 15; i++) {
-            //     const box = MeshBuilder.CreateBox(`box${i}`, boxSize, scene);
-            //     box.position = currentPosition.clone();
-            //     // pathData.push(currentPosition.clone()); // Removed: pathData is a prop
-
-            //     if (i === 0) {
-            //         box.material = greenMaterial;
-                } else {
-                    box.material = blueMaterial;
-                }
-            });
-            // End of new path rendering based on prop
-
-
+            // Load player model
             const loadPlayerModel = async () => {
                 try {
                     const result = await SceneLoader.ImportMeshAsync('', '/assets/', 'capybara.glb', scene);
                     if (result.meshes.length > 0) {
-                        const mainMesh = result.meshes[0]; // Renamed to mainMesh to avoid conflict
-                        setCapybaraMesh(mainMesh); // Set state
+                        const mainMesh = result.meshes[0];
                         mainMesh.name = 'capybara';
-                        if (pathData && pathData.length > 0) { // Check prop pathData
-                            mainMesh.position = pathData[0]; // Initial position from prop
-                            console.log('Capybara model loaded and positioned at initial pathData[0]:', pathData[0]);
-                        } else {
-                            console.warn('Prop pathData is empty or undefined, cannot set initial position for capybara.');
+                        setCapybaraMesh(mainMesh); // Store mesh in state
+                        if (pathData.length > 0) {
+                            mainMesh.position = pathData[0]; // Initial position
                         }
-                        // You might want to scale the model if it's too big or small
-                        // mainMesh.scaling.scaleInPlace(0.5); // Example: half size
+                        console.log('Capybara model loaded and positioned at start.');
                     }
                 } catch (e) {
                     console.error('Failed to load capybara model:', e);
                 }
             };
-
             loadPlayerModel();
 
             engine.runRenderLoop(() => {
@@ -94,15 +68,60 @@ const SceneComponent: React.FC<SceneComponentProps> = ({ playerPosition, pathDat
                 engine.dispose();
             };
         }
-    }, [reactCanvas]); // Main useEffect for scene setup. PathData is not a dependency here as boxes are created once.
+    }, [reactCanvas, pathData]); // pathData added to deps for board creation
 
-    // New useEffect for updating player model position based on props
+    // useEffect for capybara movement animation
     useEffect(() => {
-        if (capybaraMesh && pathData && pathData[playerPosition]) {
-            console.log(`SceneComponent: Moving capybara to pathData[${playerPosition}]`, pathData[playerPosition]);
-            capybaraMesh.position = pathData[playerPosition];
+        if (capybaraMesh && pathData && pathData[playerPosition] !== undefined && sceneInstance) {
+            const frameRate = 60;
+            const movementDurationSeconds = 1.0; // Animate over 1 second
+            const totalFrames = frameRate * movementDurationSeconds;
+
+            const startPosition = capybaraMesh.position.clone(); // Current actual position
+            const endPosition = pathData[playerPosition];    // Target position from props
+
+            // Avoid self-animation if already at target (e.g. initial load or same spot)
+            if (startPosition.equalsWithEpsilon(endPosition, 0.01)) {
+                // console.log('SceneComponent: Capybara already at target position, animation skipped.');
+                // Ensure capybara is exactly at the endPosition if it's the initial placement
+                if (capybaraMesh.position !== endPosition) capybaraMesh.position = endPosition;
+                return;
+            }
+
+            console.log(`SceneComponent: Animating capybara from ${startPosition} to ${endPosition}`);
+
+            const positionAnimation = new Animation(
+                'capybaraPositionAnimation', // name
+                'position',                  // property to animate
+                frameRate,                   // frames per second
+                Animation.ANIMATIONTYPE_VECTOR3, // datatype
+                Animation.ANIMATIONLOOPMODE_CONSTANT // loop mode
+            );
+
+            const keys = [];
+            keys.push({ frame: 0, value: startPosition });
+            keys.push({ frame: totalFrames, value: endPosition });
+            positionAnimation.setKeys(keys);
+
+            // Stop any previous animations on the mesh to prevent conflicts
+            sceneInstance.stopAnimation(capybaraMesh);
+
+            sceneInstance.beginAnimation(capybaraMesh, 0, totalFrames, false, 1, () => {
+                console.log('SceneComponent: Capybara animation finished.');
+                if (capybaraMesh) { // Ensure mesh still exists
+                    capybaraMesh.position = endPosition; // Ensure final position is precise
+                }
+                if (onMovementAnimationEnd) {
+                    onMovementAnimationEnd(); // Call the callback
+                }
+            });
+        } else {
+            // Optional: Add more detailed logs for why animation is skipped
+            // if (!capybaraMesh) console.warn('SceneComponent: Animation skipped, capybaraMesh is null.');
+            // if (!pathData || pathData[playerPosition] === undefined) console.warn('SceneComponent: Animation skipped, pathData or target position is invalid.');
+            // if (!sceneInstance) console.warn('SceneComponent: Animation skipped, sceneInstance is null.');
         }
-    }, [playerPosition, pathData, capybaraMesh]);
+    }, [playerPosition, pathData, capybaraMesh, sceneInstance]);
 
     return <canvas ref={reactCanvas} style={{ width: '100%', height: '100%' }} />;
 };
