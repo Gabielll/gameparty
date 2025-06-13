@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3, MeshBuilder, StandardMaterial, Color3, SceneLoader, Nullable, AbstractMesh, Animation } from '@babylonjs/core';
+import { Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3, MeshBuilder, StandardMaterial, Color3, SceneLoader, type Nullable, AbstractMesh, Animation } from '@babylonjs/core';
 
 interface SceneComponentProps {
   playerPosition: number;

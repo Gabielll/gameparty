@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect } from 'react'; // Added useEffect, removed React
 import SceneComponent from './scenes/SceneComponent';
 import './App.css'; // Keep App.css for global styles if any
 import { Vector3 } from '@babylonjs/core'; // Added for pathData
