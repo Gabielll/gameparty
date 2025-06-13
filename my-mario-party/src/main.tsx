@@ -1,3 +1,4 @@
+import "@babylonjs/loaders/glTF"; // For loading .glb models
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
